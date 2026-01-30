@@ -8,6 +8,7 @@ import smtplib
 import datetime
 import time
 from loguru import logger
+import html
 
 framework = """
 <!DOCTYPE HTML>
@@ -59,8 +60,18 @@ def get_empty_html():
   """
   return block_template
 
-def get_block_html(title:str, authors:str, rate:str,arxiv_id:str, abstract:str, pdf_url:str, code_url:str=None, affiliations:str=None):
+def get_block_html(title:str, authors:str, rate:str,arxiv_id:str, abstract:str, pdf_url:str, code_url:str=None, affiliations:str=None, innovation_analysis:str=None):
     code = f'<a href="{code_url}" style="display: inline-block; text-decoration: none; font-size: 14px; font-weight: bold; color: #fff; background-color: #5bc0de; padding: 8px 16px; border-radius: 4px; margin-left: 8px;">Code</a>' if code_url else ''
+    analysis_block = ""
+    if innovation_analysis:
+        analysis_block = f"""
+    <tr>
+        <td style="font-size: 14px; color: #333; padding: 8px 0;">
+            <strong>Innovation Analysis:</strong>
+            <pre style="white-space: pre-wrap; font-size: 13px; background-color: #fff; border: 1px solid #eee; padding: 8px; border-radius: 6px;">{innovation_analysis}</pre>
+        </td>
+    </tr>
+"""
     block_template = """
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
     <tr>
@@ -90,6 +101,7 @@ def get_block_html(title:str, authors:str, rate:str,arxiv_id:str, abstract:str, 
             <strong>TLDR:</strong> {abstract}
         </td>
     </tr>
+    {analysis_block}
 
     <tr>
         <td style="padding: 8px 0;">
@@ -99,7 +111,7 @@ def get_block_html(title:str, authors:str, rate:str,arxiv_id:str, abstract:str, 
     </tr>
 </table>
 """
-    return block_template.format(title=title, authors=authors,rate=rate,arxiv_id=arxiv_id, abstract=abstract, pdf_url=pdf_url, code=code, affiliations=affiliations)
+    return block_template.format(title=title, authors=authors,rate=rate,arxiv_id=arxiv_id, abstract=abstract, pdf_url=pdf_url, code=code, affiliations=affiliations, analysis_block=analysis_block)
 
 def get_stars(score:float):
     full_star = '<span class="full-star">⭐</span>'
@@ -139,7 +151,8 @@ def render_email(papers:list[ArxivPaper]):
                 affiliations += ', ...'
         else:
             affiliations = 'Unknown Affiliation'
-        parts.append(get_block_html(p.title, authors,rate,p.arxiv_id ,p.tldr, p.pdf_url, p.code_url, affiliations))
+        analysis = html.escape(p.innovation_analysis)
+        parts.append(get_block_html(p.title, authors,rate,p.arxiv_id ,p.tldr, p.pdf_url, p.code_url, affiliations, analysis))
         time.sleep(10)
 
     content = '<br>' + '</br><br>'.join(parts) + '</br>'

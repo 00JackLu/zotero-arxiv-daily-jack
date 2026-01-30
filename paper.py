@@ -214,6 +214,86 @@ class ArxivPaper:
         return tldr
 
     @cached_property
+    def innovation_analysis(self) -> str:
+        introduction = ""
+        conclusion = ""
+        if self.tex is not None:
+            content = self.tex.get("all")
+            if content is None:
+                content = "\n".join(self.tex.values())
+            #remove cite
+            content = re.sub(r'~?\\cite.?\{.*?\}', '', content)
+            #remove figure
+            content = re.sub(r'\\begin\{figure\}.*?\\end\{figure\}', '', content, flags=re.DOTALL)
+            #remove table
+            content = re.sub(r'\\begin\{table\}.*?\\end\{table\}', '', content, flags=re.DOTALL)
+            #find introduction and conclusion
+            match = re.search(r'\\section\{Introduction\}.*?(\\section|\\end\{document\}|\\bibliography|\\appendix|$)', content, flags=re.DOTALL)
+            if match:
+                introduction = match.group(0)
+            match = re.search(r'\\section\{Conclusion\}.*?(\\section|\\end\{document\}|\\bibliography|\\appendix|$)', content, flags=re.DOTALL)
+            if match:
+                conclusion = match.group(0)
+
+        llm = get_llm()
+        prompt = """你将根据给定的标题、摘要、引言与结论（如果有）来重建论文的“创新是如何产生的”。
+只能基于提供的文本，不要编造具体论文、作者或年份；信息不足时请明确写“文中未明确”或“无法从提供文本判断”。
+输出必须严格遵循以下格式，不要添加任何额外说明：
+
+---
+论文 ID: __PAPER_ID__
+
+前人基础：
+- 列出关键前人工作，以及它们解决了什么
+
+观察到的局限：
+- 前人方法在哪一步遇到瓶颈或限制
+
+关键洞见：
+- 作者新看到的视角 / 认知突破
+
+组合 / 改造方式：
+- 旧方法是如何被重新组合、迁移或调整的
+
+涉及的创新模式：
+- （可多选，例如：重新定义问题 / 跨领域借鉴 / 表示方式转换 等）
+
+为什么可行（因果解释）：
+- 解释这套组合为什么在机制上是合理的
+
+反事实失败：
+- 如果没有这个关键洞见，方法会在哪一步失效
+---
+
+\\title{__TITLE__}
+\\begin{abstract}__ABSTRACT__\\end{abstract}
+__INTRODUCTION__
+__CONCLUSION__
+"""
+        prompt = prompt.replace('__PAPER_ID__', self.arxiv_id)
+        prompt = prompt.replace('__TITLE__', self.title)
+        prompt = prompt.replace('__ABSTRACT__', self.summary)
+        prompt = prompt.replace('__INTRODUCTION__', introduction)
+        prompt = prompt.replace('__CONCLUSION__', conclusion)
+
+        # use gpt-4o tokenizer for estimation
+        enc = tiktoken.encoding_for_model("gpt-4o")
+        prompt_tokens = enc.encode(prompt)
+        prompt_tokens = prompt_tokens[:4000]  # truncate to 4000 tokens
+        prompt = enc.decode(prompt_tokens)
+
+        analysis = llm.generate(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an assistant who reconstructs how a paper's innovation was conceived, strictly from provided text.",
+                },
+                {"role": "user", "content": prompt},
+            ]
+        )
+        return analysis
+
+    @cached_property
     def affiliations(self) -> Optional[list[str]]:
         if self.tex is not None:
             content = self.tex.get("all")
